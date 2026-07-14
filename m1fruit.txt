@@ -11,37 +11,33 @@ local Config = getgenv().Config or {
         ["Webhook Url"] = "paste_your_wedhook"
     },
     HopServer = {
-        ["Time Hop"] = "10m" -- s = giây, m = phút
+        ["Time Hop"] = "10m"
     },
     TargetTime = {
         ["Skip Player"] = false,
         ["Skip Time"] = "1m"
     },
     PlayerSit = {
-        ["Player sit"] = true -- false = không đánh người ngồi, true = đánh
+        ["Player sit"] = true
     },
     SafeZone = {
-        ["Health Low"] = 4500, -- Máu thấp thì bay lên 99999
-        ["Health Safe"] = 6000 -- Hồi đủ máu thì quay lại chỗ cũ
+        ["Health Low"] = 4500,
+        ["Health Safe"] = 6000
     }
 }
 
 getgenv().FullBountyClaim = getgenv().FullBountyClaim or 0
-getgenv().Observation = true -- Bật Ken Haki
+getgenv().Observation = true
 
 local FarmDelay = Config.HuntConfig["Farm Delay"]
 local SpectateTarget = Config.Settings and Config.Settings["Specator Target"]
 
 repeat task.wait() until game:IsLoaded()
 
--- ==========================================
--- CHỜ 1S VÀ TẢI ĐOẠN SCRIPT BỔ TRỢ
--- ==========================================
 task.spawn(function()
     task.wait(1)
-    -- URL đã được thay thế bằng link an toàn mẫu. Thay bằng link của bạn nếu chắc chắn mã nguồn an toàn.
     pcall(function()
-        loadstring(game:HttpGet("https://pastefy.app/wxEFja0s/raw"))()
+        loadstring(game:HttpGet("https://pastefy.app/wxEFja0s/rawt"))()
     end)
 end)
 
@@ -69,9 +65,6 @@ local function FormatNumber(n)
     return s
 end
 
--- ==========================================
--- BỔ TRỢ: NHẬN DIỆN SEA
--- ==========================================
 local function CheckSea()
     if (PlaceID == 2753915549 or PlaceID == 85211729168715) then return 1
     elseif (PlaceID == 4442272183 or PlaceID == 79091703265657) then return 2
@@ -80,9 +73,6 @@ local function CheckSea()
     return 0
 end
 
--- ==========================================
--- GỬI WEBHOOK
--- ==========================================
 local function SendWebhook(bountyClaimed)
     if not Config.Webhook["Webhook Send"] or Config.Webhook["Webhook Url"] == "" or Config.Webhook["Webhook Url"] == "paste_your_wedhook" then return end
     
@@ -113,12 +103,8 @@ local function SendWebhook(bountyClaimed)
     end)
 end
 
--- ==========================================
--- BỔ TRỢ: TỰ ĐỘNG BẬT HAKI (BUSO & KEN)
--- ==========================================
 task.spawn(function()
     while task.wait(0.5) do
-        -- Buso Haki (Vũ trang)
         pcall(function()
             if player.Character and not player.Character:FindFirstChild("HasBuso") then
                 ReplicatedStorage.Remotes.CommF_:InvokeServer("Buso")
@@ -129,7 +115,6 @@ end)
 
 task.spawn(function()
     while task.wait() do
-        -- Ken Haki (Quan sát)
         if getgenv().Observation then
             pcall(function()
                 ReplicatedStorage.Remotes.CommE:FireServer("Ken", true)
@@ -138,7 +123,6 @@ task.spawn(function()
     end
 end)
 
--- LUÔN ÉP BẬT PVP
 task.spawn(function()
     while task.wait(1) do
         pcall(function()
@@ -147,9 +131,6 @@ task.spawn(function()
     end
 end)
 
--- ==========================================
--- GIAO DIỆN UI
--- ==========================================
 if player.PlayerGui:FindFirstChild("BountyUI") then
     player.PlayerGui.BountyUI:Destroy()
 end
@@ -302,9 +283,6 @@ function GetTargets()
     return list
 end
 
--- ==========================================
--- HÀM SERVER HOP
--- ==========================================
 local function HopServer()
     pcall(function()
         local url = "https://games.roblox.com/v1/games/" .. PlaceID .. "/servers/Public?sortOrder=Desc&limit=100"
@@ -322,7 +300,7 @@ local function HopServer()
 end
 
 -- ==========================================
--- TWEEN & LOGIC ĐÁNH (CẬP NHẬT TWEEN MƯỢT VÀ GIẾT TỚI CHẾT)
+-- HỆ THỐNG TWEEN & KHÓA MỤC TIÊU (BÁM SÁT TUYỆT ĐỐI)
 -- ==========================================
 local TeleportLoop = true
 local CurrentTargetIndex = 1
@@ -345,29 +323,7 @@ local function EnsureAntiFall()
     end
 end
 
-local function TweenTo(targetCFrame, speed)
-    local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-    if not myHRP then return end
-    
-    -- Chống rơi rớt khi tween
-    EnsureAntiFall()
-    
-    local dist = (myHRP.Position - targetCFrame.Position).Magnitude
-    speed = speed or 300
-    local tweenInfo = TweenInfo.new(dist / speed, Enum.EasingStyle.Linear)
-    
-    if currentTween then currentTween:Cancel() end
-    currentTween = TweenService:Create(myHRP, tweenInfo, {CFrame = targetCFrame})
-    currentTween:Play()
-end
-
-local function FreezeVelocity(char)
-    if char and char:FindFirstChild("HumanoidRootPart") then
-        char.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
-        char.HumanoidRootPart.RotVelocity = Vector3.new(0, 0, 0)
-    end
-end
-
+-- Ép tuyệt đối vật lý bằng 0 trước khi máy chủ tính toán
 RunService.Stepped:Connect(function()
     if TeleportLoop and player.Character then
         for _, v in pairs(player.Character:GetDescendants()) do
@@ -375,14 +331,33 @@ RunService.Stepped:Connect(function()
                 v.CanCollide = false
             end
         end
+        local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            hrp.Velocity = Vector3.new(0, 0, 0)
+            hrp.RotVelocity = Vector3.new(0, 0, 0)
+        end
     end
 end)
+
+local function TweenTo(targetCFrame, speed)
+    local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if not myHRP then return end
+    
+    EnsureAntiFall()
+    
+    local dist = (myHRP.Position - targetCFrame.Position).Magnitude
+    speed = speed or 300 
+    local tweenInfo = TweenInfo.new(dist / speed, Enum.EasingStyle.Linear)
+    
+    if currentTween then currentTween:Cancel() end
+    currentTween = TweenService:Create(myHRP, tweenInfo, {CFrame = targetCFrame})
+    currentTween:Play()
+end
 
 task.spawn(function()
     while task.wait() do
         if not TeleportLoop then continue end
         
-        -- Check Time Hop
         if tick() - StartTime >= hopTimeLimit then
             HopServer()
             task.wait(2)
@@ -399,7 +374,7 @@ task.spawn(function()
             elseif pHealth >= Config.SafeZone["Health Safe"] then
                 if isHealing and OldPosition then
                     TweenTo(OldPosition, 300)
-                    task.wait(1)
+                    task.wait((player.Character.HumanoidRootPart.Position - OldPosition.Position).Magnitude / 300)
                     OldPosition = nil
                 end
                 isHealing = false
@@ -410,11 +385,10 @@ task.spawn(function()
             if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                 local myX = player.Character.HumanoidRootPart.Position.X
                 local myZ = player.Character.HumanoidRootPart.Position.Z
-                TweenTo(CFrame.new(myX, 99999, myZ), 1000)
-                FreezeVelocity(player.Character)
+                TweenTo(CFrame.new(myX, 5000, myZ), 300)
             end
             L_StatusBounty.Text = "Status: Healing (SafeZone)"
-            task.wait(0.1)
+            task.wait(0.5)
             continue
         end
 
@@ -441,34 +415,32 @@ task.spawn(function()
         local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 
         if myHRP and tHRP then
-            L_StatusBounty.Text = "Status: Tweening to Target"
-            
+            -- Cam theo dõi
             task.spawn(function()
                 if CurrentTarget and CurrentTarget.Character and CurrentTarget.Character:FindFirstChild("HumanoidRootPart") then
                     Camera.CFrame = CFrame.new(Camera.CFrame.Position, CurrentTarget.Character.HumanoidRootPart.Position)
                 end
             end)
             
-            TweenTo(tHRP.CFrame * CFrame.new(0, 0, 3), 300)
-            
             local targetDied = false
-            local BindConnection
-            BindConnection = RunService.Heartbeat:Connect(function()
+            local isLocked = false
+            local targetPath = tHRP.CFrame * CFrame.new(0, 0, 3)
+            
+            -- Kết nối bám dính tuyệt đối mỗi Frame
+            local lockConnection = RunService.Heartbeat:Connect(function()
                 pcall(function()
-                    if not isHealing and CurrentTarget and CurrentTarget.Character and CurrentTarget.Character:FindFirstChild("HumanoidRootPart") 
+                    if isLocked and not isHealing and CurrentTarget and CurrentTarget.Character and CurrentTarget.Character:FindFirstChild("HumanoidRootPart") 
                        and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                        -- Tự động giữ BodyVelocity để chống rớt
-                        EnsureAntiFall()
-                        if (player.Character.HumanoidRootPart.Position - CurrentTarget.Character.HumanoidRootPart.Position).Magnitude < 15 then
-                            L_StatusBounty.Text = "Status: Bounty M1 Turn"
-                            player.Character.HumanoidRootPart.CFrame = CurrentTarget.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
-                        end
-                        FreezeVelocity(player.Character)
+                        -- Bám chặt lưng mục tiêu
+                        player.Character.HumanoidRootPart.CFrame = CurrentTarget.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
+                        player.Character.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
+                        player.Character.HumanoidRootPart.RotVelocity = Vector3.new(0, 0, 0)
                     end
                 end)
             end)
 
-            -- XÓA THỜI GIAN ĐỢI, ĐÁNH CHO TỚI KHI CHẾT
+            TweenTo(targetPath, 300)
+
             while true do
                 if not TeleportLoop or isHealing then break end
                 
@@ -483,10 +455,35 @@ task.spawn(function()
                     targetDied = true
                     break
                 end
-                task.wait()
+                
+                local currentTargetPos = CurrentTarget.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
+                local distToTarget = (player.Character.HumanoidRootPart.Position - currentTargetPos.Position).Magnitude
+                
+                EnsureAntiFall()
+                
+                if distToTarget <= 20 then
+                    -- Khi tới gần (Dưới 20 studs): Hủy Tween, chuyển sang trạng thái Khóa Bám Dính
+                    if currentTween then currentTween:Cancel() end
+                    isLocked = true
+                    L_StatusBounty.Text = "Status: Bounty M1 Turn"
+                else
+                    -- Khi rớt lại phía sau (Trên 20 studs): Tắt bám dính, bẻ lái Tween để đuổi theo
+                    isLocked = false
+                    L_StatusBounty.Text = "Status: Tweening to Target"
+                    
+                    if not currentTween or currentTween.PlaybackState ~= Enum.PlaybackState.Playing or (targetPath.Position - currentTargetPos.Position).Magnitude > 5 then
+                        targetPath = currentTargetPos
+                        TweenTo(targetPath, 300)
+                    end
+                end
+                
+                -- Cập nhật với tốc độ khung hình trò chơi
+                RunService.Heartbeat:Wait()
             end
             
-            if BindConnection then BindConnection:Disconnect() end
+            -- Ngắt kết nối bám dính và Tween khi chuyển mục tiêu
+            if lockConnection then lockConnection:Disconnect() end
+            if currentTween then currentTween:Cancel() end
             
             if targetDied then
                 if CurrentTarget and CurrentTarget.Character and CurrentTarget.Character:FindFirstChild("Humanoid") then
