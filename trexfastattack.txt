@@ -1,0 +1,156 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+local Player = Players.LocalPlayer
+local Modules = ReplicatedStorage:WaitForChild("Modules")
+local Net = Modules:WaitForChild("Net")
+local RegisterAttack = Net:WaitForChild("RE/RegisterAttack")
+local RegisterHit = Net:WaitForChild("RE/RegisterHit")
+
+local CONFIG = {
+    RANGE = 100,
+    ATTACKS_PER_FRAME = 15,
+    HITS_PER_FRAME = 15,
+    FRUIT_SPAM = 15,
+    CLICK_SPEED = 0.05
+}
+
+local FruitArmed = false
+local LastTool = nil
+local IsClicking = false
+
+local function IsAlive(m)
+    local h = m:FindFirstChild("Humanoid")
+    return h and h.Health > 0
+end
+
+local function GetTargets()
+    local char = Player.Character
+    if not char then return {} end
+
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return {} end
+
+    local list = {}
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= Player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and IsAlive(p.Character) then
+            local dist = (hrp.Position - p.Character.HumanoidRootPart.Position).Magnitude
+            if dist <= CONFIG.RANGE then
+                table.insert(list, p.Character)
+            end
+        end
+    end
+
+    if #list == 0 and workspace:FindFirstChild("Enemies") then
+        for _, v in ipairs(workspace.Enemies:GetChildren()) do
+            if v:FindFirstChild("HumanoidRootPart") and IsAlive(v) then
+                local dist = (hrp.Position - v.HumanoidRootPart.Position).Magnitude
+                if dist <= CONFIG.RANGE then
+                    table.insert(list, v)
+                end
+            end
+        end
+    end
+
+    return list
+end
+
+local function ArmFruit()
+    VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,1)
+    task.wait()
+    VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,1)
+end
+
+local function StartFastClicking()
+    if IsClicking then return end
+    IsClicking = true
+    task.spawn(function()
+        while IsClicking do
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+            task.wait(CONFIG.CLICK_SPEED)
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+            task.wait(CONFIG.CLICK_SPEED)
+        end
+    end)
+end
+
+local function StopFastClicking()
+    IsClicking = false
+end
+
+local function AttackMeleeSword(targets)
+    for _ = 1, CONFIG.ATTACKS_PER_FRAME do
+        RegisterAttack:FireServer(0)
+    end
+
+    local args = {[1]=targets[1].HumanoidRootPart,[2]={}}
+    for i,v in ipairs(targets) do
+        args[2][i] = {v, v.HumanoidRootPart}
+    end
+
+    for _ = 1, CONFIG.HITS_PER_FRAME do
+        RegisterHit:FireServer(unpack(args))
+    end
+end
+
+local function AttackFruit(targets, hrp)
+    local char = Player.Character
+    if not char then return end
+
+    local tool = char:FindFirstChildOfClass("Tool")
+    if not tool or tool.ToolTip ~= "Blox Fruit" then return end
+
+    local remote = tool:FindFirstChild("LeftClickRemote")
+    if not remote or not targets[1] then return end
+
+    if not FruitArmed then
+        ArmFruit()
+        FruitArmed = true
+        return
+    end
+
+    local dir = (targets[1].HumanoidRootPart.Position - hrp.Position).Unit
+
+    for _ = 1, CONFIG.FRUIT_SPAM do
+        remote:FireServer(dir, 1)
+    end
+end
+
+RunService.Heartbeat:Connect(function()
+    local char = Player.Character
+    if not char then 
+        StopFastClicking()
+        return 
+    end
+    
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then 
+        StopFastClicking()
+        return 
+    end
+
+    local tool = char:FindFirstChildOfClass("Tool")
+    if tool ~= LastTool then
+        FruitArmed = false
+        LastTool = tool
+    end
+
+    local targets = GetTargets()
+    if #targets == 0 then 
+        StopFastClicking()
+        return 
+    end
+
+    if tool and (tool.ToolTip == "Melee" or tool.ToolTip == "Sword") then
+        StartFastClicking()
+        AttackMeleeSword(targets)
+    elseif tool and tool.ToolTip == "Blox Fruit" then
+        StartFastClicking()
+        AttackFruit(targets, hrp)
+    else
+        StopFastClicking()
+    end
+end)
