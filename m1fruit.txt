@@ -1,0 +1,529 @@
+local Config = getgenv().Config or {
+    Team = "Pirates",
+    Settings = {
+        ["Specator Target"] = false
+    },
+    HuntConfig = {
+        ["Farm Delay"] = 0.22
+    },
+    Webhook = {
+        ["Webhook Send"] = false,
+        ["Webhook Url"] = "paste_your_wedhook"
+    },
+    HopServer = {
+        ["Time Hop"] = "10m" -- s = giây, m = phút
+    },
+    TargetTime = {
+        ["Skip Player"] = false,
+        ["Skip Time"] = "1m"
+    },
+    PlayerSit = {
+        ["Player sit"] = true -- false = không đánh người ngồi, true = đánh
+    },
+    SafeZone = {
+        ["Health Low"] = 4500, -- Máu thấp thì bay lên 99999
+        ["Health Safe"] = 6000 -- Hồi đủ máu thì quay lại chỗ cũ
+    }
+}
+
+getgenv().FullBountyClaim = getgenv().FullBountyClaim or 0
+getgenv().Observation = true -- Bật Ken Haki
+
+local FarmDelay = Config.HuntConfig["Farm Delay"]
+local SpectateTarget = Config.Settings and Config.Settings["Specator Target"]
+
+repeat task.wait() until game:IsLoaded()
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Stats = game:GetService("Stats")
+
+local player = Players.LocalPlayer
+local PlaceID = game.PlaceId
+local Camera = workspace.CurrentCamera
+
+pcall(function()
+    ReplicatedStorage.Remotes.CommF_:InvokeServer("SetTeam", Config.Team)
+end)
+
+local function FormatNumber(n)
+    local s = tostring(n)
+    local k
+    repeat s, k = string.gsub(s, "^(-?%d+)(%d%d%d)", "%1.%2") until k == 0
+    return s
+end
+
+-- ==========================================
+-- BỔ TRỢ: NHẬN DIỆN SEA
+-- ==========================================
+local function CheckSea()
+    if (PlaceID == 2753915549 or PlaceID == 85211729168715) then return 1
+    elseif (PlaceID == 4442272183 or PlaceID == 79091703265657) then return 2
+    elseif (PlaceID == 7449423635 or PlaceID == 100117331123089) then return 3
+    end
+    return 0
+end
+
+-- ==========================================
+-- GỬI WEBHOOK
+-- ==========================================
+local function SendWebhook(bountyClaimed)
+    if not Config.Webhook["Webhook Send"] or Config.Webhook["Webhook Url"] == "" or Config.Webhook["Webhook Url"] == "paste_your_wedhook" then return end
+    
+    local fps = math.floor(workspace:GetRealPhysicsFPS())
+    local data = {
+        content = "",
+        embeds = {{
+            title = "DIO Bounty M1 Claim Bounty",
+            color = tonumber("0x00ff00"),
+            fields = {
+                {name = "Name:", value = player.Name, inline = false},
+                {name = "Sea:", value = tostring(CheckSea()), inline = false},
+                {name = "Full Bounty:", value = FormatNumber(player.leaderstats["Bounty/Honor"].Value), inline = false},
+                {name = "Bounty Claim:", value = FormatNumber(bountyClaimed), inline = false},
+                {name = "Fps:", value = tostring(fps), inline = false}
+            },
+            footer = {text = "https://discord.gg/MjGt2bTWBS"}
+        }}
+    }
+    
+    pcall(function()
+        local jsonData = HttpService:JSONEncode(data)
+        if request then
+            request({Url = Config.Webhook["Webhook Url"], Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData})
+        elseif syn and syn.request then
+            syn.request({Url = Config.Webhook["Webhook Url"], Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = jsonData})
+        end
+    end)
+end
+
+-- ==========================================
+-- BỔ TRỢ: TỰ ĐỘNG BẬT HAKI (BUSO & KEN)
+-- ==========================================
+task.spawn(function()
+    while task.wait(0.5) do
+        -- Buso Haki (Vũ trang)
+        pcall(function()
+            if player.Character and not player.Character:FindFirstChild("HasBuso") then
+                ReplicatedStorage.Remotes.CommF_:InvokeServer("Buso")
+            end
+        end)
+    end
+end)
+
+task.spawn(function()
+    while task.wait() do
+        -- Ken Haki (Quan sát)
+        if getgenv().Observation then
+            pcall(function()
+                ReplicatedStorage.Remotes.CommE:FireServer("Ken", true)
+            end)
+        end
+    end
+end)
+
+-- LUÔN ÉP BẬT PVP
+task.spawn(function()
+    while task.wait(1) do
+        pcall(function()
+            ReplicatedStorage.Remotes.CommF_:InvokeServer("EnablePvp")
+        end)
+    end
+end)
+
+-- ==========================================
+-- GIAO DIỆN UI
+-- ==========================================
+if player.PlayerGui:FindFirstChild("BountyUI") then
+    player.PlayerGui.BountyUI:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "BountyUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = player.PlayerGui
+
+local Main = Instance.new("Frame")
+Main.Size = UDim2.new(0, 250, 0, 260) -- Tăng size để chứa thêm FPS & Ping
+Main.Position = UDim2.new(0, 15, 0, 50)
+Main.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+Main.BackgroundTransparency = 0.4
+Main.BorderSizePixel = 0
+Main.Parent = ScreenGui
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 8)
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = Main
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+UIListLayout.Padding = UDim.new(0, 5)
+
+local UIPadding = Instance.new("UIPadding")
+UIPadding.Parent = Main
+UIPadding.PaddingBottom = UDim.new(0, 10)
+UIPadding.PaddingLeft = UDim.new(0, 10)
+
+local function makeLabel(txt, order, col)
+    local L = Instance.new("TextLabel")
+    L.Size = UDim2.new(1, 0, 0, 20)
+    L.BackgroundTransparency = 1
+    L.Text = txt
+    L.Font = Enum.Font.Code
+    L.TextSize = 14
+    L.TextXAlignment = Enum.TextXAlignment.Left
+    L.TextColor3 = col or Color3.new(1, 1, 1)
+    L.LayoutOrder = order
+    L.Parent = Main
+    return L
+end
+
+local L_Game           = makeLabel("Game: Blox Fruit", 1, Color3.fromRGB(0, 255, 127))
+local L_TotalBounty    = makeLabel("Bounty: 0", 2, Color3.fromRGB(255, 215, 0))
+local L_BountyClaim    = makeLabel("Bounty Claim: 0", 3, Color3.fromRGB(255, 100, 100))
+local L_FullBounty     = makeLabel("Full Bounty Claim: " .. FormatNumber(getgenv().FullBountyClaim), 4, Color3.fromRGB(255, 50, 50))
+local L_StatusBounty   = makeLabel("Status: Reset", 5, Color3.fromRGB(200, 200, 200))
+local L_TargetClaim    = makeLabel("Target Claim: 0", 6, Color3.fromRGB(150, 150, 255))
+local L_TimeInServer   = makeLabel("Time in Server: 00:00:00", 7, Color3.fromRGB(255, 255, 255))
+local L_FPS            = makeLabel("FPS: --", 8, Color3.fromRGB(255, 165, 0))
+local L_Ping           = makeLabel("Ping: --", 9, Color3.fromRGB(0, 255, 255))
+
+local StartTime = tick()
+local TargetClaimCount = 0
+local ServerStartBounty = 0
+local CurrentBounty = 0
+local hasInit = false
+
+-- Đọc thời gian Hop Server
+local hopTimeLimit = math.huge
+if Config.HopServer["Time Hop"] then
+    local str = Config.HopServer["Time Hop"]
+    if str:match("m") then
+        hopTimeLimit = tonumber(str:match("%d+")) * 60
+    elseif str:match("s") then
+        hopTimeLimit = tonumber(str:match("%d+"))
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    local e = math.floor(tick() - StartTime)
+    L_TimeInServer.Text = string.format("Time in Server: %02d:%02d:%02d", math.floor(e / 3600), math.floor((e % 3600) / 60), e % 60)
+    L_FPS.Text = "FPS: " .. math.floor(workspace:GetRealPhysicsFPS())
+end)
+
+task.spawn(function()
+    while task.wait(1) do
+        pcall(function()
+            local pingStr = Stats.Network.ServerStatsItem["Data Ping"]:GetValueString()
+            local pingNum = pingStr:match("%d+")
+            if pingNum then
+                L_Ping.Text = "Ping: " .. pingNum .. " ms"
+            end
+        end)
+    end
+end)
+
+task.spawn(function()
+    while task.wait(0.5) do
+        pcall(function()
+            local v = player.leaderstats["Bounty/Honor"].Value
+            L_TotalBounty.Text = "Bounty: " .. FormatNumber(v)
+
+            if not hasInit then
+                ServerStartBounty = v
+                CurrentBounty = v
+                hasInit = true
+            else
+                if v > CurrentBounty then
+                    local gained = v - CurrentBounty
+                    getgenv().FullBountyClaim = getgenv().FullBountyClaim + gained
+                    L_FullBounty.Text = "Full Bounty Claim: " .. FormatNumber(getgenv().FullBountyClaim)
+                    CurrentBounty = v
+                    SendWebhook(gained) -- Gửi webhook khi nhận được bounty
+                elseif v < CurrentBounty then
+                    CurrentBounty = v 
+                end
+                
+                local localGain = CurrentBounty - ServerStartBounty
+                if localGain > 0 then
+                    L_BountyClaim.Text = "Bounty Claim: " .. FormatNumber(localGain)
+                end
+            end
+        end)
+    end
+end)
+
+local DeadTargets = {}
+
+local function ShouldSkipTarget(targetPlayer)
+    if not targetPlayer.Character then return true end
+    local tHum = targetPlayer.Character:FindFirstChild("Humanoid")
+    if not tHum then return true end
+
+    if tHum.Health <= 0 or DeadTargets[targetPlayer.Name] then
+        return true
+    end
+    
+    -- Không bật PvP / Ở SafeZone (Có ForceField)
+    if targetPlayer.Character:FindFirstChildOfClass("ForceField") then
+        return true
+    end
+    
+    -- Check ngồi thuyền (Tùy theo Config)
+    if tHum.Sit and not Config.PlayerSit["Player sit"] then
+        return true
+    end
+    
+    return false
+end
+
+function GetTargets()
+    local list = {}
+    for _, v in pairs(Players:GetPlayers()) do
+        if Config.Team == "Marines" and v.Team and v.Team.Name == "Marines" then continue end
+        if v ~= player and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
+            if not ShouldSkipTarget(v) then
+                table.insert(list, v)
+            end
+        end
+    end
+    return list
+end
+
+-- ==========================================
+-- HÀM SERVER HOP
+-- ==========================================
+local function HopServer()
+    pcall(function()
+        local url = "https://games.roblox.com/v1/games/" .. PlaceID .. "/servers/Public?sortOrder=Desc&limit=100"
+        local success, result = pcall(function() return HttpService:JSONDecode(game:HttpGet(url)) end)
+        if success and result and result.data then
+            for _, server in ipairs(result.data) do
+                if server.playing < server.maxPlayers and server.id ~= game.JobId then
+                    L_StatusBounty.Text = "Status: Hopping Server..."
+                    TeleportService:TeleportToPlaceInstance(PlaceID, server.id, player)
+                    task.wait(2)
+                end
+            end
+        end
+    end)
+end
+
+-- ==========================================
+-- TWEEN & LOGIC ĐÁNH
+-- ==========================================
+local TeleportLoop = true
+local CurrentTargetIndex = 1
+local isHealing = false
+local currentTween = nil
+local OldPosition = nil
+
+local function TweenTo(targetCFrame, speed)
+    local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if not myHRP then return end
+    
+    local dist = (myHRP.Position - targetCFrame.Position).Magnitude
+    speed = speed or 300
+    local tweenInfo = TweenInfo.new(dist / speed, Enum.EasingStyle.Linear)
+    
+    if currentTween then currentTween:Cancel() end
+    currentTween = TweenService:Create(myHRP, tweenInfo, {CFrame = targetCFrame})
+    currentTween:Play()
+end
+
+local function FreezeVelocity(char)
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        char.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
+        char.HumanoidRootPart.RotVelocity = Vector3.new(0, 0, 0)
+    end
+end
+
+RunService.Stepped:Connect(function()
+    if TeleportLoop and player.Character then
+        for _, v in pairs(player.Character:GetDescendants()) do
+            if v:IsA("BasePart") and v.CanCollide then
+                v.CanCollide = false
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    while task.wait() do
+        if not TeleportLoop then continue end
+        
+        -- Check Time Hop
+        if tick() - StartTime >= hopTimeLimit then
+            HopServer()
+            task.wait(2)
+            continue
+        end
+        
+        if player.Character and player.Character:FindFirstChild("Humanoid") then
+            local pHealth = player.Character.Humanoid.Health
+            if pHealth < Config.SafeZone["Health Low"] then
+                if not isHealing then
+                    OldPosition = player.Character.HumanoidRootPart.CFrame
+                end
+                isHealing = true
+            elseif pHealth >= Config.SafeZone["Health Safe"] then
+                if isHealing and OldPosition then
+                    TweenTo(OldPosition, 300) -- Quay lại vị trí cũ sau khi hồi
+                    task.wait(1)
+                    OldPosition = nil
+                end
+                isHealing = false
+            end
+        end
+
+        if isHealing then
+            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local myX = player.Character.HumanoidRootPart.Position.X
+                local myZ = player.Character.HumanoidRootPart.Position.Z
+                TweenTo(CFrame.new(myX, 99999, myZ), 1000)
+                FreezeVelocity(player.Character)
+            end
+            L_StatusBounty.Text = "Status: Healing (SafeZone)"
+            task.wait(0.1)
+            continue
+        end
+
+        local targets = GetTargets()
+        
+        if #targets == 0 then
+            HopServer()
+            task.wait(2)
+            continue
+        end
+
+        if CurrentTargetIndex > #targets then
+            CurrentTargetIndex = 1 
+        end
+
+        local CurrentTarget = targets[CurrentTargetIndex]
+
+        if ShouldSkipTarget(CurrentTarget) then
+            CurrentTargetIndex = CurrentTargetIndex + 1
+            continue
+        end
+
+        local tHRP = CurrentTarget.Character and CurrentTarget.Character:FindFirstChild("HumanoidRootPart")
+        local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+
+        if myHRP and tHRP then
+            L_StatusBounty.Text = "Status: Tweening to Target"
+            
+            -- Cam Snake: Ép camera nhìn theo mục tiêu liên tục
+            task.spawn(function()
+                if CurrentTarget and CurrentTarget.Character and CurrentTarget.Character:FindFirstChild("HumanoidRootPart") then
+                    Camera.CFrame = CFrame.new(Camera.CFrame.Position, CurrentTarget.Character.HumanoidRootPart.Position)
+                end
+            end)
+            
+            TweenTo(tHRP.CFrame * CFrame.new(0, 0, 3), 300)
+            
+            local holdTime = 8 
+            local loopStartTime = tick()
+            local targetDied = false
+            
+            local BindConnection
+            BindConnection = RunService.Heartbeat:Connect(function()
+                pcall(function()
+                    if not isHealing and CurrentTarget and CurrentTarget.Character and CurrentTarget.Character:FindFirstChild("HumanoidRootPart") 
+                       and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                        -- Giữ khoảng cách khi đã tween đến gần
+                        if (player.Character.HumanoidRootPart.Position - CurrentTarget.Character.HumanoidRootPart.Position).Magnitude < 15 then
+                            L_StatusBounty.Text = "Status: Bounty M1 Turn"
+                            player.Character.HumanoidRootPart.CFrame = CurrentTarget.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
+                        end
+                        FreezeVelocity(player.Character)
+                    end
+                end)
+            end)
+
+            while tick() - loopStartTime < holdTime do
+                if not TeleportLoop or isHealing then break end
+                
+                if player.Character and player.Character:FindFirstChild("Humanoid") then
+                    if player.Character.Humanoid.Health < Config.SafeZone["Health Low"] then
+                        isHealing = true
+                        break
+                    end
+                end
+
+                if not CurrentTarget.Character or ShouldSkipTarget(CurrentTarget) then
+                    targetDied = true
+                    break
+                end
+                task.wait()
+            end
+            
+            if BindConnection then BindConnection:Disconnect() end
+            
+            if targetDied then
+                if CurrentTarget and CurrentTarget.Character and CurrentTarget.Character:FindFirstChild("Humanoid") then
+                    if CurrentTarget.Character.Humanoid.Health <= 0 and not DeadTargets[CurrentTarget.Name] then
+                        TargetClaimCount = TargetClaimCount + 1
+                        L_TargetClaim.Text = "Target Claim: " .. tostring(TargetClaimCount)
+                        DeadTargets[CurrentTarget.Name] = true
+                    end
+                end
+            else
+                if not isHealing and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    TweenTo(player.Character.HumanoidRootPart.CFrame * CFrame.new(0, 50, 0), 300)
+                    task.wait(0.5)
+                end
+            end
+
+            CurrentTargetIndex = CurrentTargetIndex + 1
+        else
+            task.wait(FarmDelay)
+        end
+    end
+end)
+
+-- ==========================================
+-- TỰ ĐỘNG CHỌN TRÁI ÁC QUỶ LIÊN TỤC
+-- ==========================================
+_G.SelectWeapon = nil
+
+function GetFruit()
+    if player.Backpack then
+        for _, v in pairs(player.Backpack:GetChildren()) do
+            if v.ToolTip == "Blox Fruit" then
+                _G.SelectWeapon = v.Name
+                return
+            end
+        end
+    end
+    if player.Character then
+        for _, v in pairs(player.Character:GetChildren()) do
+            if v:IsA("Tool") and v.ToolTip == "Blox Fruit" then
+                _G.SelectWeapon = v.Name
+                return
+            end
+        end
+    end
+end
+
+function EquipFruit()
+    pcall(function()
+        if _G.SelectWeapon and player.Backpack:FindFirstChild(_G.SelectWeapon) and player.Character and player.Character:FindFirstChild("Humanoid") then
+            player.Character.Humanoid:EquipTool(player.Backpack[_G.SelectWeapon])
+        end
+    end)
+end
+
+task.spawn(function()
+    while true do
+        pcall(function()
+            GetFruit()
+            EquipFruit()
+        end)
+        task.wait(0.1)
+    end
+end)
